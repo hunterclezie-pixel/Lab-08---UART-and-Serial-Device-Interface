@@ -125,279 +125,366 @@ Setup:
 GOTO Main    
 
 Main:
-    ; Diagnostic pulse for receive service
+    ; Pulse RB0 so we can see how often the main loop runs
     BANKSEL PORTB
-    BSF PORTB,0
-    BCF PORTB,0
- 
+    BSF PORTB,0      ; Turn RB0 HIGH
+    BCF PORTB,0      ; Turn RB0 LOW
+
+    ; Check for received data, prepare replies, and send data
     CALL ServiceRx
     CALL ServiceReply
     CALL ServiceTx
-    GOTO Main
+    GOTO Main        ; Keep repeating the main loop
 
 ServiceRx:
-    ; Every register used here (RCSTA, PIR1, RCREG, GPRs) is in bank 0
+    ; RCSTA, PIR1, RCREG, and our GPRs are all in bank 0
     BANKSEL RCSTA
-    BTFSC RCSTA,1    ; Receive overrun?
+
+    ; Check if the receiver has an overrun error
+    BTFSC RCSTA,1
     GOTO RxOverrun
-    BTFSS PIR1,5     ; Byte received?
-    RETURN
-    BTFSC RCSTA,2    ; Framing error?
+
+    ; Check if a new byte has been received
+    BTFSS PIR1,5
+    RETURN          ; No new byte, return to Main
+
+    ; Check if the received byte has a framing error
+    BTFSC RCSTA,2
     GOTO RxFraming
-    MOVF RCREG,W     ; Read received byte
+
+    ; Read the received byte and save it in rx_byte
+    MOVF RCREG,W
     MOVWF rx_byte
- 
-    ; Ignore new requests if a reply is pending
+
+    ; Check if we are already working on a reply
     MOVF reply_pending,F
     BTFSS STATUS,2
-    RETURN
+    RETURN          ; Ignore new data until the reply is prepared
+
+    ; Send the received byte to the packet parser
     CALL ParseRxByte
     RETURN
- 
-; Receive Errors
+
 RxOverrun:
-    BCF RCSTA,4      ; Reset receiver
-    BSF RCSTA,4
-    MOVLW 0x04       ; Overrun error
+    ; An overrun means the receiver was not read fast enough
+    BCF RCSTA,4      ; Turn the receiver OFF
+    BSF RCSTA,4      ; Turn the receiver back ON
+    MOVLW 0x04       ; 4 means an overrun error
     GOTO RxError
- 
+
 RxFraming:
-    MOVF RCREG,W     ; Discard invalid byte
-    MOVLW 0x03       ; Framing error
- 
+    ; A framing error means the received byte was not valid
+    MOVF RCREG,W     ; Read and discard the bad byte
+    MOVLW 0x03       ; 3 means a framing error
+
 RxError:
+    ; Save the error so we can send a response later
     MOVWF reply_pending
-    CLRF rx_state    ; Back to WAIT_START
+
+    ; Reset the packet parser so we wait for a new '$'
+    CLRF rx_state
+
+    ; Reset the ADC state in case a conversion was started
+    CLRF adc_state
     RETURN
- 
-; Packet Parser
+
 ParseRxByte:
+    ; Check if we are waiting for the start byte
     MOVF rx_state,F
     BTFSC STATUS,2
     GOTO WaitStart
+
+    ; Check if we are waiting for the command byte
     MOVF rx_state,W
     XORLW 0x01
     BTFSC STATUS,2
     GOTO GetCommand
+
+    ; Check if we are waiting for the length byte
     MOVF rx_state,W
     XORLW 0x02
     BTFSC STATUS,2
     GOTO GetLength
- 
-    ; Remaining valid state is GET_CHANNEL
+
+    ; Check if we are waiting for the channel byte
+    MOVF rx_state,W
+    XORLW 0x03
+    BTFSC STATUS,2
     GOTO GetChannel
- 
+
+    ; If the state is not valid, restart the packet
+    GOTO ResetParser
+
 WaitStart:
+    ; Every packet should begin with '$' (0x24)
     MOVF rx_byte,W
-    XORLW 0x24      ; '$'
+    XORLW 0x24
     BTFSS STATUS,2
-    RETURN
+    RETURN          ; Not '$', keep waiting
+
+    ; Start byte found, move to command state
     MOVLW 0x01
     MOVWF rx_state
     RETURN
- 
-; Read Command
+
 GetCommand:
+    ; Check if the command is 'I' for Device ID
     MOVF rx_byte,W
-    XORLW 0x49      ; 'I'
+    XORLW 0x49
     BTFSC STATUS,2
     GOTO SaveCommand
-    
+
+    ; Check if the command is 'A' for ADC
     MOVF rx_byte,W
-    XORLW 0x41      ; 'A'
+    XORLW 0x41
     BTFSS STATUS,2
-    GOTO ResetParser
- 
+    GOTO ResetParser    ; Not I or A, restart packet
+
 SaveCommand:
+    ; Save the command so we know what was requested
     MOVF rx_byte,W
     MOVWF rx_command
+
+    ; Move to the packet length state
     MOVLW 0x02
     MOVWF rx_state
     RETURN
- 
+
 GetLength:
-    ; Read Packet Length
+    ; Check if the saved command was for Device ID
     MOVF rx_command,W
-    XORLW 0x49      ; ID command?
+    XORLW 0x49
     BTFSC STATUS,2
     GOTO IDLength
- 
-    ; ADC command must have length 1
+
+    ; ADC requests must have a length of 1
     MOVF rx_byte,W
     XORLW 0x01
     BTFSS STATUS,2
     GOTO ResetParser
+
+    ; Correct ADC length, move to channel state
     MOVLW 0x03
     MOVWF rx_state
     RETURN
- 
+
 IDLength:
+    ; ID requests only have 3 bytes, so the packet is done
     CLRF rx_state
- 
-    ; ID command must have length 0
+
+    ; The ID request must have a data length of 0
     MOVF rx_byte,F
     BTFSS STATUS,2
-    RETURN
-    MOVLW 0x01      ; ID response
+    RETURN          ; Wrong length, ignore request
+
+    ; Request a Device ID response
+    MOVLW 0x01
     MOVWF reply_pending
     RETURN
- 
+
 GetChannel:
-    ; Read ADC Channel
+    ; The last byte of the request has been received
     CLRF rx_state
- 
-    ; Only AN0 is supported
+
+    ; We only support channel AN0, which is 0x00
     MOVF rx_byte,F
     BTFSS STATUS,2
-    RETURN
+    RETURN          ; Wrong channel, ignore request
+
+    ; Reset ADC state before starting a new reading
     CLRF adc_state
-    MOVLW 0x02      ; ADC response
+
+    ; Request an ADC response
+    MOVLW 0x02
     MOVWF reply_pending
     RETURN
- 
+
 ResetParser:
+    ; Go back to waiting for the '$' start byte
     CLRF rx_state
     RETURN
- 
+
 ServiceReply:
-    ; Prepare Response Packet
     BANKSEL reply_pending
+
+    ; Check if a response needs to be sent
     MOVF reply_pending,F
     BTFSC STATUS,2
-    RETURN
- 
-    ; Wait until previous response is finished
+    RETURN          ; No reply needed
+
+    ; Check if the previous packet has finished being queued
     MOVF tx_length,W
     XORWF tx_count,W
     BTFSS STATUS,2
-    RETURN
- 
-    ; Check response type
+    RETURN          ; Still sending the previous packet
+
+    ; Check if we need to send the Device ID
     MOVF reply_pending,W
     XORLW 0x01
     BTFSC STATUS,2
     GOTO BuildID
+
+    ; Check if we need to send an ADC reading
     MOVF reply_pending,W
     XORLW 0x02
     BTFSC STATUS,2
     GOTO BuildADC
+
+    ; Otherwise we need to send an error response
     GOTO BuildError
- 
+
 BuildID:
-    MOVLW 0x49      ; 'I'
+    ; Device ID packet: 24 49 02 33 75
+    MOVLW 0x49       ; 'I' means Device ID
     MOVWF tx_data1
-    MOVLW 0x02      ; Two data bytes
+    MOVLW 0x02       ; Two data bytes
     MOVWF tx_data2
-    MOVLW 0x33
+
+    ; Our Device ID is 0x3375
+    MOVLW 0x33       ; High byte of ID
     MOVWF tx_data3
-    MOVLW 0x75
+    MOVLW 0x75       ; Low byte of ID
     MOVWF tx_data4
-    MOVLW 0x05      ; Five total bytes
+
+    ; Five bytes total in the response
+    MOVLW 0x05
     GOTO FinishPacket
- 
+
 BuildADC:
-    ; ADC Response
+    ; First we need to get an ADC reading
     CALL ServiceAdc
+
+    ; Check if the ADC conversion is finished
     BANKSEL adc_state
     MOVF adc_state,W
     XORLW 0x02
     BTFSS STATUS,2
-    RETURN          ; Not READY yet, try again next loop
-    MOVLW 0x41      ; 'A'
+    RETURN          ; Not ready yet, try again next loop
+
+    ; ADC packet: 24 41 03 00 HH LL
+    MOVLW 0x41       ; 'A' means ADC response
     MOVWF tx_data1
-    MOVLW 0x03      ; Three data bytes
+    MOVLW 0x03       ; Three data bytes
     MOVWF tx_data2
-    CLRF tx_data3    ; AN0 channel
+    CLRF tx_data3    ; Channel number is AN0 (0)
+
+    ; Put the high and low ADC bytes into the packet
     MOVF adc_high,W
     MOVWF tx_data4
     MOVF adc_low,W
     MOVWF tx_data5
+
+    ; Reset ADC state for the next reading
     CLRF adc_state
-    MOVLW 0x06      ; Six total bytes
+
+    ; Six bytes total in the response
+    MOVLW 0x06
     GOTO FinishPacket
- 
+
 BuildError:
-    MOVLW 0x45      ; 'E'
+    ; Error packet: 24 45 02 EE 00
+    MOVLW 0x45       ; 'E' means error
     MOVWF tx_data1
-    MOVLW 0x02
+    MOVLW 0x02       ; Two data bytes
     MOVWF tx_data2
- 
-    ; reply_pending 3 -> framing = 1, 4 -> overrun = 2
+
+    ; reply_pending = 3 for framing error
+    ; reply_pending = 4 for overrun error
+    ; Subtract 2 to get the correct error code
     MOVF reply_pending,W
     ADDLW -2
-    MOVWF tx_data3
-    CLRF tx_data4    ; Detail = 0
+    MOVWF tx_data3   ; Save error code (1 or 2)
+    CLRF tx_data4    ; Error detail is always 0
+
+    ; Five bytes total in the response
     MOVLW 0x05
     GOTO FinishPacket
- 
+
 FinishPacket:
-    ; Complete Packet Setup (W holds the packet length)
+    ; W already contains the total packet length
     MOVWF tx_length
-    MOVLW 0x24      ; '$'
+
+    ; Every response starts with '$' (0x24)
+    MOVLW 0x24
     MOVWF tx_data0
+
+    ; Start transmitting from the first byte
     CLRF tx_count
+
+    ; Clear the reply flag because the packet is ready
     CLRF reply_pending
     RETURN
- 
+
 ServiceAdc:
     BANKSEL adc_state
- 
-    ; State 0: IDLE
+
+    ; adc_state = 0 means the ADC is not running
     MOVF adc_state,F
     BTFSC STATUS,2
     GOTO StartAdc
- 
-    ; State 1: BUSY
+
+    ; adc_state = 1 means a conversion is running
     MOVF adc_state,W
     XORLW 0x01
     BTFSS STATUS,2
-    RETURN
- 
-    ; Wait for conversion to finish (ADCON0 is in bank 0)
+    RETURN          ; Already finished or invalid state
+
+    ; Check the GO/DONE bit to see if ADC is finished
     BTFSC ADCON0,1
-    RETURN
- 
-    ; Save 10-bit ADC result
-    MOVF ADRESH,W   ; bank 0
+    RETURN          ; Conversion is still running
+
+    ; Read the high byte of the ADC result
+    MOVF ADRESH,W
     MOVWF adc_high
-    BANKSEL ADRESL  ; bank 1
+
+    ; ADRESL is in bank 1, so switch banks
+    BANKSEL ADRESL
     MOVF ADRESL,W
-    BANKSEL adc_low ; back to bank 0
+
+    ; Go back to bank 0 and save the low byte
+    BANKSEL adc_low
     MOVWF adc_low
-    MOVLW 0x02      ; READY
+
+    ; Set adc_state to 2 to show the result is ready
+    MOVLW 0x02
     MOVWF adc_state
     RETURN
- 
+
 StartAdc:
-    BSF ADCON0,1     ; Start conversion
-    MOVLW 0x01      ; BUSY
+    ; Start a new ADC conversion on AN0
+    BSF ADCON0,1     ; Set GO/DONE to start conversion
+
+    ; Set adc_state to 1 because ADC is now busy
+    MOVLW 0x01
     MOVWF adc_state
     RETURN
- 
+
 ServiceTx:
-    ; PIR1, TXREG and the GPRs are in bank 0. FSR and INDF are in every bank
+    ; Our packet buffer and UART registers are in bank 0
     BANKSEL tx_count
- 
-    ; Check whether packet is finished
+
+    ; Check if all packet bytes have been sent
     MOVF tx_length,W
     XORWF tx_count,W
     BTFSC STATUS,2
-    RETURN
- 
-    ; Check whether TXREG is available
+    RETURN          ; All bytes have been queued
+
+    ; Check if TXREG is ready for another byte
     BTFSS PIR1,4
-    RETURN
- 
-    ; Point FSR to the next packet byte: FSR = tx_data0 + tx_count
+    RETURN          ; Transmit register is still full
+
+    ; Find the next byte in our transmit buffer
     MOVF tx_count,W
     ADDLW tx_data0
     MOVWF FSR
- 
-    ; Read buffer byte through INDF and transmit it
-    MOVF INDF,W
-    MOVWF TXREG
- 
-    ; Advance transmit index
+
+    ; Make sure indirect addressing uses bank 0/1
+    BCF STATUS,7   ; IRP = 0
+    MOVF INDF,W	   ; INDF reads the byte at the address stored in FSR
+    MOVWF TXREG    ; Send that byte through the UART
+
+    ; Increase the counter to point to the next byte
     INCF tx_count,F
     RETURN
+
 END
