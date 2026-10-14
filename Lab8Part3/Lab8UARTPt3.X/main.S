@@ -129,74 +129,49 @@ Main:
     BANKSEL PORTB
     BSF PORTB,0
     BCF PORTB,0
-
+ 
     CALL ServiceRx
     CALL ServiceReply
     CALL ServiceTx
     GOTO Main
 
-; Receive Service
 ServiceRx:
-    ; Check for receive overrun
+    ; Every register used here (RCSTA, PIR1, RCREG, GPRs) is in bank 0
     BANKSEL RCSTA
-    BTFSC RCSTA,1
+    BTFSC RCSTA,1    ; Receive overrun?
     GOTO RxOverrun
-
-    ; Check whether a byte was received
-    BANKSEL PIR1
-    BTFSS PIR1,5
+    BTFSS PIR1,5     ; Byte received?
     RETURN
-
-    ; Check for framing error
-    BANKSEL RCSTA
-    BTFSC RCSTA,2
+    BTFSC RCSTA,2    ; Framing error?
     GOTO RxFraming
-
-    ; Read received byte
-    BANKSEL RCREG
-    MOVF RCREG,W
-
-    BANKSEL rx_byte
+    MOVF RCREG,W     ; Read received byte
     MOVWF rx_byte
-
-    ; Ignore new requests if a reply is active
+ 
+    ; Ignore new requests if a reply is pending
     MOVF reply_pending,F
-    BTFSS STATUS,2
-    RETURN
-
-    MOVF tx_length,W
-    XORWF tx_count,W
     BTFSS STATUS,2
     RETURN
     CALL ParseRxByte
     RETURN
-
+ 
 ; Receive Errors
 RxOverrun:
-    BANKSEL RCSTA
     BCF RCSTA,4      ; Reset receiver
     BSF RCSTA,4
-    BANKSEL rx_state
-    CLRF rx_state
-    CLRF adc_state
     MOVLW 0x04       ; Overrun error
-    MOVWF reply_pending
-    RETURN
-
+    GOTO RxError
+ 
 RxFraming:
-    BANKSEL RCREG
     MOVF RCREG,W     ; Discard invalid byte
-    BANKSEL rx_state
-    CLRF rx_state
-    CLRF adc_state
     MOVLW 0x03       ; Framing error
+ 
+RxError:
     MOVWF reply_pending
+    CLRF rx_state    ; Back to WAIT_START
     RETURN
-
-
+ 
 ; Packet Parser
 ParseRxByte:
-    BANKSEL rx_state
     MOVF rx_state,F
     BTFSC STATUS,2
     GOTO WaitStart
@@ -208,11 +183,10 @@ ParseRxByte:
     XORLW 0x02
     BTFSC STATUS,2
     GOTO GetLength
-
+ 
     ; Remaining valid state is GET_CHANNEL
     GOTO GetChannel
-
-; Wait for Start Byte
+ 
 WaitStart:
     MOVF rx_byte,W
     XORLW 0x24      ; '$'
@@ -221,33 +195,33 @@ WaitStart:
     MOVLW 0x01
     MOVWF rx_state
     RETURN
-
+ 
 ; Read Command
 GetCommand:
     MOVF rx_byte,W
     XORLW 0x49      ; 'I'
     BTFSC STATUS,2
     GOTO SaveCommand
-
+    
     MOVF rx_byte,W
     XORLW 0x41      ; 'A'
     BTFSS STATUS,2
     GOTO ResetParser
-
+ 
 SaveCommand:
     MOVF rx_byte,W
     MOVWF rx_command
     MOVLW 0x02
     MOVWF rx_state
     RETURN
-
-; Read Packet Length
+ 
 GetLength:
+    ; Read Packet Length
     MOVF rx_command,W
-    XORLW 0x49      ; ID command
+    XORLW 0x49      ; ID command?
     BTFSC STATUS,2
     GOTO IDLength
-
+ 
     ; ADC command must have length 1
     MOVF rx_byte,W
     XORLW 0x01
@@ -256,10 +230,10 @@ GetLength:
     MOVLW 0x03
     MOVWF rx_state
     RETURN
-
+ 
 IDLength:
     CLRF rx_state
-
+ 
     ; ID command must have length 0
     MOVF rx_byte,F
     BTFSS STATUS,2
@@ -267,12 +241,11 @@ IDLength:
     MOVLW 0x01      ; ID response
     MOVWF reply_pending
     RETURN
-
-
-; Read ADC Channel
+ 
 GetChannel:
+    ; Read ADC Channel
     CLRF rx_state
-
+ 
     ; Only AN0 is supported
     MOVF rx_byte,F
     BTFSS STATUS,2
@@ -281,24 +254,24 @@ GetChannel:
     MOVLW 0x02      ; ADC response
     MOVWF reply_pending
     RETURN
-
+ 
 ResetParser:
     CLRF rx_state
     RETURN
-
-; Prepare Response Packet
+ 
 ServiceReply:
+    ; Prepare Response Packet
     BANKSEL reply_pending
     MOVF reply_pending,F
     BTFSC STATUS,2
     RETURN
-
+ 
     ; Wait until previous response is finished
     MOVF tx_length,W
     XORWF tx_count,W
     BTFSS STATUS,2
     RETURN
-
+ 
     ; Check response type
     MOVF reply_pending,W
     XORLW 0x01
@@ -309,10 +282,8 @@ ServiceReply:
     BTFSC STATUS,2
     GOTO BuildADC
     GOTO BuildError
-
-; Device ID Response
+ 
 BuildID:
-    BANKSEL tx_data0
     MOVLW 0x49      ; 'I'
     MOVWF tx_data1
     MOVLW 0x02      ; Two data bytes
@@ -323,15 +294,15 @@ BuildID:
     MOVWF tx_data4
     MOVLW 0x05      ; Five total bytes
     GOTO FinishPacket
-
-; ADC Response
+ 
 BuildADC:
+    ; ADC Response
     CALL ServiceAdc
     BANKSEL adc_state
     MOVF adc_state,W
     XORLW 0x02
     BTFSS STATUS,2
-    RETURN
+    RETURN          ; Not READY yet, try again next loop
     MOVLW 0x41      ; 'A'
     MOVWF tx_data1
     MOVLW 0x03      ; Three data bytes
@@ -344,106 +315,89 @@ BuildADC:
     CLRF adc_state
     MOVLW 0x06      ; Six total bytes
     GOTO FinishPacket
-
-; Error Response
+ 
 BuildError:
-    BANKSEL tx_data0
     MOVLW 0x45      ; 'E'
     MOVWF tx_data1
     MOVLW 0x02
     MOVWF tx_data2
-
-    ; Framing = 1, Overrun = 2
+ 
+    ; reply_pending 3 -> framing = 1, 4 -> overrun = 2
     MOVF reply_pending,W
     ADDLW -2
     MOVWF tx_data3
     CLRF tx_data4    ; Detail = 0
     MOVLW 0x05
     GOTO FinishPacket
-
-; Complete Packet Setup
+ 
 FinishPacket:
-    BANKSEL tx_length
+    ; Complete Packet Setup (W holds the packet length)
     MOVWF tx_length
     MOVLW 0x24      ; '$'
     MOVWF tx_data0
     CLRF tx_count
     CLRF reply_pending
     RETURN
-
-; ADC Conversion Service
+ 
 ServiceAdc:
     BANKSEL adc_state
-
+ 
     ; State 0: IDLE
     MOVF adc_state,F
     BTFSC STATUS,2
     GOTO StartAdc
-
+ 
     ; State 1: BUSY
     MOVF adc_state,W
     XORLW 0x01
     BTFSS STATUS,2
     RETURN
-
-    ; Wait for conversion to finish
-    BANKSEL ADCON0
+ 
+    ; Wait for conversion to finish (ADCON0 is in bank 0)
     BTFSC ADCON0,1
     RETURN
-
+ 
     ; Save 10-bit ADC result
-    BANKSEL ADRESH
-    MOVF ADRESH,W
-    BANKSEL adc_high
+    MOVF ADRESH,W   ; bank 0
     MOVWF adc_high
-    BANKSEL ADRESL
+    BANKSEL ADRESL  ; bank 1
     MOVF ADRESL,W
-    BANKSEL adc_low
+    BANKSEL adc_low ; back to bank 0
     MOVWF adc_low
     MOVLW 0x02      ; READY
     MOVWF adc_state
     RETURN
-
+ 
 StartAdc:
-    BANKSEL ADCON0
     BSF ADCON0,1     ; Start conversion
-    BANKSEL adc_state
     MOVLW 0x01      ; BUSY
     MOVWF adc_state
     RETURN
-
-; Transmit Service
+ 
 ServiceTx:
+    ; PIR1, TXREG and the GPRs are in bank 0. FSR and INDF are in every bank
     BANKSEL tx_count
-
+ 
     ; Check whether packet is finished
     MOVF tx_length,W
     XORWF tx_count,W
     BTFSC STATUS,2
     RETURN
-
+ 
     ; Check whether TXREG is available
-    BANKSEL PIR1
     BTFSS PIR1,4
     RETURN
-
-    ; Point FSR to the next packet byte
-    BANKSEL tx_count
+ 
+    ; Point FSR to the next packet byte: FSR = tx_data0 + tx_count
     MOVF tx_count,W
     ADDLW tx_data0
-    BANKSEL FSR
     MOVWF FSR
-    BCF STATUS,7     ; IRP = 0
-
-    ; Read buffer byte and transmit it
-    BANKSEL INDF
+ 
+    ; Read buffer byte through INDF and transmit it
     MOVF INDF,W
-    BANKSEL TXREG
     MOVWF TXREG
-
+ 
     ; Advance transmit index
-    BANKSEL tx_count
     INCF tx_count,F
     RETURN
-
 END
