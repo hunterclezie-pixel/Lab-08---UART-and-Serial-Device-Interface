@@ -26,23 +26,27 @@
 ; config statements should precede project file includes.
 #include <xc.inc>  
     ; General Purpose Registers
-    rx_byte       EQU 0x20 ; Used to store the received byte
-    rx_state      EQU 0x21 ; Used to track the current receive state
-    rx_command    EQU 0x22 ; Used to store the received command
-    reply_pending EQU 0x23 ; Used to track if a reply is needed
-    adc_state     EQU 0x24 ; Used to track the ADC conversion state
-    adc_high      EQU 0x25 ; Used to store the high ADC byte
-    adc_low       EQU 0x26 ; Used to store the low ADC byte
-    tx_length     EQU 0x27 ; Used to store the number of bytes to send
-    tx_count      EQU 0x28 ; Used to count the bytes being sent
+    rx_byte       EQU 0x70 ; Used to store the received byte
+    rx_state      EQU 0x71 ; Used to track the current receive state
+    rx_command    EQU 0x72 ; Used to store the received command
+    reply_pending EQU 0x73 ; Used to track if a reply is needed
+    adc_state     EQU 0x74 ; Used to track the ADC conversion state
+    adc_high      EQU 0x75 ; Used to store the high ADC byte
+    adc_low       EQU 0x76 ; Used to store the low ADC byte
+    tx_length     EQU 0x77 ; Used to store the number of bytes to send
+    tx_count      EQU 0x78 ; Used to count the bytes being sent
      
     ; Transmit Packet Buffer
-    tx_data0      EQU 0x29 ; Packet byte 0
-    tx_data1      EQU 0x2A ; Packet byte 1
-    tx_data2      EQU 0x2B ; Packet byte 2
-    tx_data3      EQU 0x2C ; Packet byte 3
-    tx_data4      EQU 0x2D ; Packet byte 4
-    tx_data5      EQU 0x2E ; Packet byte 5
+    tx_data0      EQU 0x79 ; Packet byte 0
+    tx_data1      EQU 0x7A ; Packet byte 1
+    tx_data2      EQU 0x7B ; Packet byte 2
+    tx_data3      EQU 0x7C ; Packet byte 3
+    tx_data4      EQU 0x7D ; Packet byte 4
+    tx_data5      EQU 0x7E ; Packet byte 5
+      
+    ; Delay GPRs
+    Count5ms	  EQU 0x20
+    Count50us	  EQU 0x21
  
 ; Reset Vector at 0000h. Execution starts here after reset.
 PSECT resetVect,class=CODE,delta=2
@@ -134,6 +138,9 @@ Main:
     CALL ServiceRx
     CALL ServiceReply
     CALL ServiceTx
+    
+    ; add a 5ms delay to casue over run 
+    ; CAll Delay5ms
     GOTO Main        ; Keep repeating the main loop
 
 ServiceRx:
@@ -485,6 +492,28 @@ ServiceTx:
 
     ; Increase the counter to point to the next byte
     INCF tx_count,F
+    RETURN
+    
+Delay5ms:
+    MOVLW   0x5E
+    MOVWF   Count5ms
+    
+Delay5msLoop:
+    Call    Delay50usLoop
+    DECFSZ  Count5ms
+    GOTO    Delay5msLoop
+    MOVLW   0x04
+    MOVWF   Count5ms
+    DECFSZ  Count5ms
+    GOTO    $-1
+    RETURN
+    
+Delay50usLoop:
+    ;Delay loop is equals 44 Tcy when count is 15
+    MOVLW 0x0F             ;1 Tcy move W=15 to count
+    MOVWF Count50us        ;1 Tcy make count equal 15                                    
+    DECFSZ Count50us,1     ;1 Tcy if not zero, 2 Tcy if zero
+    GOTO $-1               ;2 Tcy delay runs 15 times before skiping
     RETURN
 
 END
