@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            components = new System.ComponentModel.Container();
             An1TimerCheckBox = new CheckBox();
             DigitalOutputLabel = new Label();
             OutputTextBox = new TextBox();
@@ -41,6 +42,10 @@
             ReadButton = new Button();
             ConnectButton = new Button();
             ExitButton = new Button();
+            FramingErrorButton = new Button();
+            ADCButton = new Button();
+            IDButton = new Button();
+            StatusTimer = new System.Windows.Forms.Timer(components);
             StatusStrip.SuspendLayout();
             SuspendLayout();
             // 
@@ -157,11 +162,44 @@
             ExitButton.UseVisualStyleBackColor = true;
             ExitButton.Click += ExitButton_Click;
             // 
+            // FramingErrorButton
+            // 
+            FramingErrorButton.Location = new Point(30, 172);
+            FramingErrorButton.Name = "FramingErrorButton";
+            FramingErrorButton.Size = new Size(94, 59);
+            FramingErrorButton.TabIndex = 25;
+            FramingErrorButton.Text = "Framing Error";
+            FramingErrorButton.UseVisualStyleBackColor = true;
+            FramingErrorButton.Click += FramingErrorButton_Click;
+            // 
+            // ADCButton
+            // 
+            ADCButton.Location = new Point(30, 237);
+            ADCButton.Name = "ADCButton";
+            ADCButton.Size = new Size(94, 66);
+            ADCButton.TabIndex = 26;
+            ADCButton.Text = "ADC";
+            ADCButton.UseVisualStyleBackColor = true;
+            ADCButton.Click += ADCButton_Click;
+            // 
+            // IDButton
+            // 
+            IDButton.Location = new Point(30, 309);
+            IDButton.Name = "IDButton";
+            IDButton.Size = new Size(94, 68);
+            IDButton.TabIndex = 27;
+            IDButton.Text = "ID";
+            IDButton.UseVisualStyleBackColor = true;
+            IDButton.Click += IDButton_Click;
+            // 
             // SerialData
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(800, 450);
+            Controls.Add(IDButton);
+            Controls.Add(ADCButton);
+            Controls.Add(FramingErrorButton);
             Controls.Add(An1TimerCheckBox);
             Controls.Add(DigitalOutputLabel);
             Controls.Add(OutputTextBox);
@@ -197,5 +235,9 @@
         private Button ReadButton;
         private Button ConnectButton;
         private Button ExitButton;
+        private Button FramingErrorButton;
+        private Button ADCButton;
+        private Button IDButton;
+        private System.Windows.Forms.Timer StatusTimer;
     }
 }
