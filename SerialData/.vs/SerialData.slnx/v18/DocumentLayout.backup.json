@@ -3,12 +3,12 @@
   "WorkspaceRootPath": "C:\\Users\\clezh\\OneDrive\\Documents\\College Classes\\Robotics\\5th Semester\\Github Labs\\Lab-08---UART-and-Serial-Device-Interface\\SerialData\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{37EF3C9D-34D8-9F86-B1D9-942310862A35}|SerialData\\SerialData.csproj|c:\\users\\clezh\\onedrive\\documents\\college classes\\robotics\\5th semester\\github labs\\lab-08---uart-and-serial-device-interface\\serialdata\\serialdata\\serialdata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{37EF3C9D-34D8-9F86-B1D9-942310862A35}|SerialData\\SerialData.csproj|solutionrelative:serialdata\\serialdata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{37EF3C9D-34D8-9F86-B1D9-942310862A35}|SerialData\\SerialData.csproj|c:\\users\\clezh\\onedrive\\documents\\college classes\\robotics\\5th semester\\github labs\\lab-08---uart-and-serial-device-interface\\serialdata\\serialdata\\serialdata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
       "RelativeMoniker": "D:0:0:{37EF3C9D-34D8-9F86-B1D9-942310862A35}|SerialData\\SerialData.csproj|solutionrelative:serialdata\\serialdata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{37EF3C9D-34D8-9F86-B1D9-942310862A35}|SerialData\\SerialData.csproj|c:\\users\\clezh\\onedrive\\documents\\college classes\\robotics\\5th semester\\github labs\\lab-08---uart-and-serial-device-interface\\serialdata\\serialdata\\serialdata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{37EF3C9D-34D8-9F86-B1D9-942310862A35}|SerialData\\SerialData.csproj|solutionrelative:serialdata\\serialdata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{37EF3C9D-34D8-9F86-B1D9-942310862A35}|SerialData\\SerialData.csproj|c:\\users\\clezh\\onedrive\\documents\\college classes\\robotics\\5th semester\\github labs\\lab-08---uart-and-serial-device-interface\\serialdata\\serialdata\\serialdata.designer.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
@@ -22,7 +22,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 2,
+          "SelectedChildIndex": 3,
           "Children": [
             {
               "$type": "Bookmark",
@@ -36,27 +36,27 @@
               "RelativeDocumentMoniker": "SerialData\\SerialData.Designer.cs",
               "ToolTip": "C:\\Users\\clezh\\OneDrive\\Documents\\College Classes\\Robotics\\5th Semester\\Github Labs\\Lab-08---UART-and-Serial-Device-Interface\\SerialData\\SerialData\\SerialData.Designer.cs",
               "RelativeToolTip": "SerialData\\SerialData.Designer.cs",
-              "ViewState": "AgIAAAYAAAAAAAAAAAAAAAIAAAASAAAAAAAAAA==",
+              "ViewState": "AgIAABYAAAAAAAAAAAAYwBYAAAAIAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-10-15T16:14:37.698Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 1,
               "Title": "SerialData.cs",
               "DocumentMoniker": "C:\\Users\\clezh\\OneDrive\\Documents\\College Classes\\Robotics\\5th Semester\\Github Labs\\Lab-08---UART-and-Serial-Device-Interface\\SerialData\\SerialData\\SerialData.cs",
               "RelativeDocumentMoniker": "SerialData\\SerialData.cs",
               "ToolTip": "C:\\Users\\clezh\\OneDrive\\Documents\\College Classes\\Robotics\\5th Semester\\Github Labs\\Lab-08---UART-and-Serial-Device-Interface\\SerialData\\SerialData\\SerialData.cs",
               "RelativeToolTip": "SerialData\\SerialData.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAuwAkAAAAFAAAAAAAAAA==",
+              "ViewState": "AgIAAPcBAAAAAAAAAAAUwAcCAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-10-13T19:46:15.619Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "SerialData.cs [Design]",
               "DocumentMoniker": "C:\\Users\\clezh\\OneDrive\\Documents\\College Classes\\Robotics\\5th Semester\\Github Labs\\Lab-08---UART-and-Serial-Device-Interface\\SerialData\\SerialData\\SerialData.cs",
               "RelativeDocumentMoniker": "SerialData\\SerialData.cs",

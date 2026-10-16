@@ -46,13 +46,21 @@
             ADCButton = new Button();
             IDButton = new Button();
             StatusTimer = new System.Windows.Forms.Timer(components);
+            ServoTrackBar = new TrackBar();
+            ServoLabel = new Label();
+            TemperatureLabel = new Label();
+            PortLabel = new Label();
+            VrefNumericUpDown = new NumericUpDown();
+            ServoDegreeLabel = new Label();
             StatusStrip.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)ServoTrackBar).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)VrefNumericUpDown).BeginInit();
             SuspendLayout();
             // 
             // An1TimerCheckBox
             // 
             An1TimerCheckBox.AutoSize = true;
-            An1TimerCheckBox.Location = new Point(12, 142);
+            An1TimerCheckBox.Location = new Point(19, 73);
             An1TimerCheckBox.Name = "An1TimerCheckBox";
             An1TimerCheckBox.Size = new Size(144, 24);
             An1TimerCheckBox.TabIndex = 24;
@@ -62,7 +70,7 @@
             // DigitalOutputLabel
             // 
             DigitalOutputLabel.AutoSize = true;
-            DigitalOutputLabel.Location = new Point(14, 76);
+            DigitalOutputLabel.Location = new Point(181, 17);
             DigitalOutputLabel.Name = "DigitalOutputLabel";
             DigitalOutputLabel.Size = new Size(104, 20);
             DigitalOutputLabel.TabIndex = 23;
@@ -70,7 +78,7 @@
             // 
             // OutputTextBox
             // 
-            OutputTextBox.Location = new Point(12, 99);
+            OutputTextBox.Location = new Point(181, 40);
             OutputTextBox.Name = "OutputTextBox";
             OutputTextBox.Size = new Size(151, 27);
             OutputTextBox.TabIndex = 22;
@@ -78,9 +86,9 @@
             // ComListBox
             // 
             ComListBox.FormattingEnabled = true;
-            ComListBox.Location = new Point(169, 6);
+            ComListBox.Location = new Point(385, 6);
             ComListBox.Name = "ComListBox";
-            ComListBox.Size = new Size(619, 344);
+            ComListBox.Size = new Size(403, 344);
             ComListBox.TabIndex = 21;
             // 
             // PortsComboBox
@@ -94,7 +102,7 @@
             // label1
             // 
             label1.AutoSize = true;
-            label1.Location = new Point(124, 309);
+            label1.Location = new Point(124, 240);
             label1.Name = "label1";
             label1.Size = new Size(0, 20);
             label1.TabIndex = 19;
@@ -164,9 +172,9 @@
             // 
             // FramingErrorButton
             // 
-            FramingErrorButton.Location = new Point(30, 172);
+            FramingErrorButton.Location = new Point(12, 103);
             FramingErrorButton.Name = "FramingErrorButton";
-            FramingErrorButton.Size = new Size(94, 59);
+            FramingErrorButton.Size = new Size(151, 47);
             FramingErrorButton.TabIndex = 25;
             FramingErrorButton.Text = "Framing Error";
             FramingErrorButton.UseVisualStyleBackColor = true;
@@ -174,9 +182,9 @@
             // 
             // ADCButton
             // 
-            ADCButton.Location = new Point(30, 237);
+            ADCButton.Location = new Point(12, 156);
             ADCButton.Name = "ADCButton";
-            ADCButton.Size = new Size(94, 66);
+            ADCButton.Size = new Size(151, 48);
             ADCButton.TabIndex = 26;
             ADCButton.Text = "ADC";
             ADCButton.UseVisualStyleBackColor = true;
@@ -184,19 +192,75 @@
             // 
             // IDButton
             // 
-            IDButton.Location = new Point(30, 309);
+            IDButton.Location = new Point(12, 210);
             IDButton.Name = "IDButton";
-            IDButton.Size = new Size(94, 68);
+            IDButton.Size = new Size(151, 50);
             IDButton.TabIndex = 27;
             IDButton.Text = "ID";
             IDButton.UseVisualStyleBackColor = true;
             IDButton.Click += IDButton_Click;
+            // 
+            // ServoTrackBar
+            // 
+            ServoTrackBar.Location = new Point(12, 363);
+            ServoTrackBar.Name = "ServoTrackBar";
+            ServoTrackBar.Size = new Size(367, 56);
+            ServoTrackBar.TabIndex = 28;
+            // 
+            // ServoLabel
+            // 
+            ServoLabel.AutoSize = true;
+            ServoLabel.Location = new Point(180, 105);
+            ServoLabel.Name = "ServoLabel";
+            ServoLabel.Size = new Size(86, 20);
+            ServoLabel.TabIndex = 29;
+            ServoLabel.Text = "Servo Label";
+            // 
+            // TemperatureLabel
+            // 
+            TemperatureLabel.AutoSize = true;
+            TemperatureLabel.Location = new Point(180, 135);
+            TemperatureLabel.Name = "TemperatureLabel";
+            TemperatureLabel.Size = new Size(133, 20);
+            TemperatureLabel.TabIndex = 30;
+            TemperatureLabel.Text = "Temperature Label";
+            // 
+            // PortLabel
+            // 
+            PortLabel.AutoSize = true;
+            PortLabel.Location = new Point(180, 163);
+            PortLabel.Name = "PortLabel";
+            PortLabel.Size = new Size(75, 20);
+            PortLabel.TabIndex = 31;
+            PortLabel.Text = "Port Label";
+            // 
+            // VrefNumericUpDown
+            // 
+            VrefNumericUpDown.Location = new Point(181, 186);
+            VrefNumericUpDown.Name = "VrefNumericUpDown";
+            VrefNumericUpDown.Size = new Size(150, 27);
+            VrefNumericUpDown.TabIndex = 32;
+            // 
+            // ServoDegreeLabel
+            // 
+            ServoDegreeLabel.AutoSize = true;
+            ServoDegreeLabel.Location = new Point(127, 340);
+            ServoDegreeLabel.Name = "ServoDegreeLabel";
+            ServoDegreeLabel.Size = new Size(139, 20);
+            ServoDegreeLabel.TabIndex = 33;
+            ServoDegreeLabel.Text = "Servo Degree Label";
             // 
             // SerialData
             // 
             AutoScaleDimensions = new SizeF(8F, 20F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(800, 450);
+            Controls.Add(ServoDegreeLabel);
+            Controls.Add(VrefNumericUpDown);
+            Controls.Add(PortLabel);
+            Controls.Add(TemperatureLabel);
+            Controls.Add(ServoLabel);
+            Controls.Add(ServoTrackBar);
             Controls.Add(IDButton);
             Controls.Add(ADCButton);
             Controls.Add(FramingErrorButton);
@@ -216,6 +280,8 @@
             Text = "Form1";
             StatusStrip.ResumeLayout(false);
             StatusStrip.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)ServoTrackBar).EndInit();
+            ((System.ComponentModel.ISupportInitialize)VrefNumericUpDown).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -239,5 +305,11 @@
         private Button ADCButton;
         private Button IDButton;
         private System.Windows.Forms.Timer StatusTimer;
+        private TrackBar ServoTrackBar;
+        private Label ServoLabel;
+        private Label TemperatureLabel;
+        private Label PortLabel;
+        private NumericUpDown VrefNumericUpDown;
+        private Label ServoDegreeLabel;
     }
 }
