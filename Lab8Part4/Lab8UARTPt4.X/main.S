@@ -1,6 +1,6 @@
 // Hunter Clezie
 // RCET3375
-// Lab8UARTPt3
+// Lab8UARTPt4
 // https://github.com/hunterclezie-pixel/Lab-08---UART-and-Serial-Device-Interface.git
 
 ; PIC16F883 Configuration Bit Settings
@@ -25,28 +25,36 @@
 
 ; config statements should precede project file includes.
 #include <xc.inc>  
-    ; General Purpose Registers
-    rx_byte       EQU 0x70 ; Used to store the received byte
-    rx_state      EQU 0x71 ; Used to track the current receive state
-    rx_command    EQU 0x72 ; Used to store the received command
-    reply_pending EQU 0x73 ; Used to track if a reply is needed
-    adc_state     EQU 0x74 ; Used to track the ADC conversion state
-    adc_high      EQU 0x75 ; Used to store the high ADC byte
-    adc_low       EQU 0x76 ; Used to store the low ADC byte
-    tx_length     EQU 0x77 ; Used to store the number of bytes to send
-    tx_count      EQU 0x78 ; Used to count the bytes being sent
+    ; General Purpose Registers (bank 0)
+    rx_byte       EQU 0x20 ; Used to store the received byte
+    rx_state      EQU 0x21 ; Used to track the current receive state
+    rx_command    EQU 0x22 ; Used to store the received command
+    reply_pending EQU 0x23 ; Used to track if a reply is needed
+    adc_state     EQU 0x24 ; Used to track the ADC conversion state
+    adc_high      EQU 0x25 ; Used to store the high ADC byte
+    adc_low       EQU 0x26 ; Used to store the low ADC byte
+    tx_length     EQU 0x27 ; Used to store the number of bytes to send
+    tx_count      EQU 0x28 ; Used to count the bytes being sent
      
     ; Transmit Packet Buffer
-    tx_data0      EQU 0x79 ; Packet byte 0
-    tx_data1      EQU 0x7A ; Packet byte 1
-    tx_data2      EQU 0x7B ; Packet byte 2
-    tx_data3      EQU 0x7C ; Packet byte 3
-    tx_data4      EQU 0x7D ; Packet byte 4
-    tx_data5      EQU 0x7E ; Packet byte 5
+    tx_data0      EQU 0x29 ; Packet byte 0
+    tx_data1      EQU 0x2A ; Packet byte 1
+    tx_data2      EQU 0x2B ; Packet byte 2
+    tx_data3      EQU 0x2C ; Packet byte 3
+    tx_data4      EQU 0x2D ; Packet byte 4
+    tx_data5      EQU 0x2E ; Packet byte 5
       
-    ; Delay GPRs
-    Count5ms	  EQU 0x20
-    Count50us	  EQU 0x21
+    ; New servo registers
+    servo_rx_h    EQU 0x30  ; High byte from S packet
+    servo_rx_l    EQU 0x31  ; Low byte from S packet
+    servo_next_h  EQU 0x32  ; Saved high byte for next frame
+    servo_next_l  EQU 0x33  ; Saved low byte for next frame
+    servo_busy    EQU 0x34  ; 1 while RC2 servo pulse is HIGH
+
+    ; Interrupt save registers (shared/common RAM)
+    W_TEMP        EQU 0x70
+    STATUS_TEMP   EQU 0x71
+    PCLATH_TEMP   EQU 0x72
  
 ; Reset Vector at 0000h. Execution starts here after reset.
 PSECT resetVect,class=CODE,delta=2
@@ -56,13 +64,17 @@ ResetVector:
 ; Interrupt Vector
 PSECT isrVect,class=CODE,delta=2
 InterruptVector:
+    GOTO ISRHandler
 
 ; Main code section starts at 0008h. User code goes here.
 PSECT code,class=CODE,delta=2
  
 Setup: 
 ; Configure UART pins
+    BANKSEL PORTC
+    BCF PORTC,2	     ; Making RC2 an output
     BANKSEL TRISC
+    BCF TRISC,2      ; RC2 is the servo signal output
     BSF TRISC,6      ; RC6/TX for transmission
     BSF TRISC,7      ; RC7/RX for reception
 
@@ -87,8 +99,8 @@ Setup:
     MOVWF SPBRG      ; 9600 baud at 4 MHz
 
     ; Configure AN0 for ADC
-    BANKSEL TRISA
-    BSF TRISA,0      ; RA0/AN0 as input
+    BSF TRISA,0      ; RA0/AN0 input
+    BCF TRISA,1      ; RA1 diagnostic output
     BANKSEL ANSEL
     MOVLW 0x01
     MOVWF ANSEL      ; Enable AN0 analog input
@@ -112,9 +124,16 @@ Setup:
     CLRF adc_low
     CLRF tx_length
     CLRF tx_count
+    CLRF servo_rx_h
+    CLRF servo_rx_l
+    CLRF servo_busy
     
-    ; Use bank 0 for indirect addressing
-    BCF STATUS,7     ; IRP = 0
+    ; Start with 1500 us: 0xB1E0 + 1500 = 0xB7BC
+    MOVLW 0xB7
+    MOVWF servo_next_h
+    MOVLW 0xBC
+    MOVWF servo_next_l
+    BCF STATUS,7     ; IRP=0: FSR will point into bank 0
 
     ; Enable EUSART Receiver
     BANKSEL RCSTA
@@ -125,23 +144,69 @@ Setup:
     BANKSEL INTCON
     BCF INTCON,7     ; Disable global interrupts
     BCF INTCON,6     ; Disable peripheral interrupts
+    
+    ; CCP1 compare generates an interrupt without controlling RC2
+    BANKSEL CCP1CON
+    MOVLW 0x0A       ; Software interrupt on compare match
+    MOVWF CCP1CON
+    BANKSEL CCPR1H
+    MOVLW 0xB7
+    MOVWF CCPR1H
+    MOVLW 0xBC
+    MOVWF CCPR1L
+
+    ; Set Timer1 for internal clock and 1:1 prescaler (1 us/tick)
+    BANKSEL T1CON
+    CLRF T1CON       ; Stop Timer1 while setting it up
+    BANKSEL TMR1H
+    MOVLW 0xB1
+    MOVWF TMR1H
+    MOVLW 0xE0
+    MOVWF TMR1L      ; 65536 - 20000 = 0xB1E0
+
+    ; Clear old interrupt flags
+    BANKSEL PIR1
+    BCF PIR1,0       ; Timer1 flag
+    BCF PIR1,2       ; CCP1 flag
+
+    ; Enable Timer1 interrupt; CCP1 enabled at frame start
+    BANKSEL PIE1
+    BSF PIE1,0       ; TMR1IE=1
+    BCF PIE1,2       ; CCP1IE=0 until first frame
+    BANKSEL INTCON
+    BSF INTCON,6     ; Enable peripheral interrupts
+    BSF INTCON,7     ; Enable global interrupts
+    BANKSEL T1CON
+    BSF T1CON,0      ; Start Timer1
+
 
 GOTO Main    
 
 Main:
-    ; Pulse RB0 so we can see how often the main loop runs
-    BANKSEL PORTB
-    BSF PORTB,0      ; Turn RB0 HIGH
-    BCF PORTB,0      ; Turn RB0 LOW
+    ; Only start foreground work when servo pulse is LOW
+    BANKSEL servo_busy
+    MOVF servo_busy,F
+    BTFSS STATUS,2
+    GOTO Main        ; Do not start work while servo is HIGH
 
-    ; Check for received data, prepare replies, and send data
+    ; Pulse RA1 to show each receive-service opportunity
+    BANKSEL PORTA
+    BSF PORTA,1
+    BCF PORTA,1
     CALL ServiceRx
+
+    BANKSEL servo_busy
+    MOVF servo_busy,F
+    BTFSS STATUS,2
+    GOTO Main
     CALL ServiceReply
+
+    BANKSEL servo_busy
+    MOVF servo_busy,F
+    BTFSS STATUS,2
+    GOTO Main
     CALL ServiceTx
-    
-    ; add a 5ms delay to casue over run 
-    CAll Delay5ms
-    GOTO Main        ; Keep repeating the main loop
+    GOTO Main            
 
 ServiceRx:
     ; RCSTA, PIR1, RCREG, and our GPRs are all in bank 0
@@ -218,6 +283,16 @@ ParseRxByte:
     XORLW 0x03
     BTFSC STATUS,2
     GOTO GetChannel
+    
+    MOVF rx_state,W
+    XORLW 0x04
+    BTFSC STATUS,2
+    GOTO GetServoHigh
+
+    MOVF rx_state,W
+    XORLW 0x05
+    BTFSC STATUS,2
+    GOTO GetServoLow
 
     ; If the state is not valid, restart the packet
     GOTO ResetParser
@@ -235,17 +310,20 @@ WaitStart:
     RETURN
 
 GetCommand:
-    ; Check if the command is 'I' for Device ID
     MOVF rx_byte,W
-    XORLW 0x49
+    XORLW 0x49       ; 'I'
     BTFSC STATUS,2
     GOTO SaveCommand
 
-    ; Check if the command is 'A' for ADC
     MOVF rx_byte,W
-    XORLW 0x41
+    XORLW 0x53       ; 'S'
+    BTFSC STATUS,2
+    GOTO SaveCommand
+
+    MOVF rx_byte,W
+    XORLW 0x41       ; 'A'
     BTFSS STATUS,2
-    GOTO ResetParser    ; Not I or A, restart packet
+    GOTO ResetParser
 
 SaveCommand:
     ; Save the command so we know what was requested
@@ -258,19 +336,22 @@ SaveCommand:
     RETURN
 
 GetLength:
-    ; Check if the saved command was for Device ID
     MOVF rx_command,W
-    XORLW 0x49
+    XORLW 0x49           ; 'I'
     BTFSC STATUS,2
     GOTO IDLength
 
-    ; ADC requests must have a length of 1
+    MOVF rx_command,W
+    XORLW 0x53           ; 'S'
+    BTFSC STATUS,2
+    GOTO ServoLength
+
+    ; 'A' request: length must be 1
     MOVF rx_byte,W
     XORLW 0x01
     BTFSS STATUS,2
     GOTO ResetParser
 
-    ; Correct ADC length, move to channel state
     MOVLW 0x03
     MOVWF rx_state
     RETURN
@@ -305,13 +386,91 @@ GetChannel:
     MOVLW 0x02
     MOVWF reply_pending
     RETURN
+    
+ServoLength:
+    MOVF rx_byte,W
+    XORLW 0x02           ; S length must be 2
+    BTFSS STATUS,2
+    GOTO ResetParser
+
+    MOVLW 0x04
+    MOVWF rx_state       ; Next byte is high compare byte
+    RETURN
+
+GetServoHigh:
+    MOVF rx_byte,W
+    MOVWF servo_rx_h     ; Save the first compare byte
+
+    MOVLW 0x05
+    MOVWF rx_state       ; Next byte is low compare byte
+    RETURN
+
+GetServoLow:
+    MOVF rx_byte,W
+    MOVWF servo_rx_l     ; Save the second compare byte
+    CLRF rx_state        ; Entire S packet received
+
+    CALL CheckServo      ; Make sure compare value is allowed
+    RETURN
 
 ResetParser:
     ; Go back to waiting for the '$' start byte
     CLRF rx_state
     RETURN
+    
+CheckServo:
+    ; Check high byte is not below 0xB3
+    MOVLW 0xB3
+    SUBWF servo_rx_h,W   ; W = high - 0xB3
+    BTFSS STATUS,0      ; C=0 means value is smaller
+    GOTO InvalidServo
+
+    MOVF servo_rx_h,W
+    XORLW 0xB3
+    BTFSC STATUS,2
+    GOTO CheckMinLow     ; At minimum high byte, check low
+
+    ; Check high byte is no greater than 0xBB
+    MOVLW 0xBB
+    SUBWF servo_rx_h,W
+    BTFSS STATUS,0
+    GOTO SaveServo       ; 0xB4..0xBA is allowed
+    MOVF servo_rx_h,W
+    XORLW 0xBB
+    BTFSS STATUS,2
+    GOTO InvalidServo    ; Above 0xBB
+
+    ; 0xBBxx needs a low byte no greater than 0xA4
+    MOVF servo_rx_l,W
+    SUBLW 0xA4           ; 0xA4 - low byte
+    BTFSS STATUS,0
+    GOTO InvalidServo
+    GOTO SaveServo
+
+CheckMinLow:
+    ; 0xB3xx needs a low byte at least 0xD4
+    MOVLW 0xD4
+    SUBWF servo_rx_l,W
+    BTFSS STATUS,0
+    GOTO InvalidServo
+
+SaveServo:
+    ; Disable interrupts only while saving both bytes together
+    BCF INTCON,7
+    MOVF servo_rx_h,W
+    MOVWF servo_next_h
+    MOVF servo_rx_l,W
+    MOVWF servo_next_l
+    BSF INTCON,7         ; Re-enable interrupts
+    RETURN               ; Valid S command has NO response
+
+InvalidServo:
+    MOVLW 0x05           ; Use reply 5 for servo range error
+    MOVWF reply_pending
+    RETURN               ; Previous valid compare value stays saved
 
 ServiceReply:
+    ; Prepare an ID, ADC, or error response
     BANKSEL reply_pending
 
     ; Check if a response needs to be sent
@@ -389,21 +548,23 @@ BuildADC:
     GOTO FinishPacket
 
 BuildError:
-    ; Error packet: 24 45 02 EE 00
-    MOVLW 0x45       ; 'E' means error
+    MOVLW 0x45           ; 'E'
     MOVWF tx_data1
-    MOVLW 0x02       ; Two data bytes
+    MOVLW 0x02
     MOVWF tx_data2
 
-    ; reply_pending = 3 for framing error
-    ; reply_pending = 4 for overrun error
-    ; Subtract 2 to get the correct error code
-    MOVF reply_pending,W
-    ADDLW -2
-    MOVWF tx_data3   ; Save error code (1 or 2)
-    CLRF tx_data4    ; Error detail is always 0
+    ; internal 3,4,5 -> packet code 1,2,3
+    MOVLW 0x02
+    SUBWF reply_pending,W
+    MOVWF tx_data3
 
-    ; Five bytes total in the response
+    ; detail = 1 only for the servo range error
+    CLRF tx_data4
+    MOVF reply_pending,W
+    XORLW 0x05
+    BTFSC STATUS,2
+    INCF tx_data4,F
+
     MOVLW 0x05
     GOTO FinishPacket
 
@@ -494,26 +655,76 @@ ServiceTx:
     INCF tx_count,F
     RETURN
     
-Delay5ms:
-    MOVLW   0x5E
-    MOVWF   Count5ms
+ISRHandler:
+   ; Save W and STATUS before changing anything in interrupt
+    MOVWF W_TEMP
+    SWAPF STATUS,W
+    MOVWF STATUS_TEMP
+
+    ; Check Timer1 overflow interrupt first.
+    BANKSEL PIR1
+    BTFSC PIR1,0      ; Did Timer1 overflow?
+    GOTO Timer1ISR
+
+    ; Check CCP1 compare interrupt.
+    BTFSC PIR1,2      ; Did Timer1 match CCPR1?
+    GOTO CCP1ISR
+    GOTO LeaveISR
     
-Delay5msLoop:
-    Call    Delay50usLoop
-    DECFSZ  Count5ms
-    GOTO    Delay5msLoop
-    MOVLW   0x04
-    MOVWF   Count5ms
-    DECFSZ  Count5ms
-    GOTO    $-1
-    RETURN
+Timer1ISR:
+    ; Timer1 overflow: begin a new 20 ms servo frame
+    BANKSEL PIR1
+    BCF PIR1,0       ; Clear Timer1 interrupt flag
+    BCF PIR1,2       ; Clear any old CCP1 match flag
+
+    ; Copy the saved command to the CCP compare hardware
+    BANKSEL servo_next_h
+    MOVF servo_next_h,W
+    BANKSEL CCPR1H
+    MOVWF CCPR1H
+
+    BANKSEL servo_next_l
+    MOVF servo_next_l,W
+    BANKSEL CCPR1L
+    MOVWF CCPR1L
+
+    ; Reload Timer1; compare target is relative to 0xB1E0
+    BANKSEL TMR1H
+    MOVLW 0xB1
+    MOVWF TMR1H
+    MOVLW 0xE0
+    MOVWF TMR1L
+
+    ; Start the servo HIGH pulse
+    BANKSEL PORTC
+    BSF PORTC,2
+    BANKSEL servo_busy
+    MOVLW 0x01
+    MOVWF servo_busy
+
+    ; Allow the CCP match to end this pulse
+    BANKSEL PIE1
+    BSF PIE1,2       ; Enable CCP1 interrupt
+    Goto LeaveISR
+
+CCP1ISR:
+    ; CCP match: end the servo pulse
+    BANKSEL PIR1
+    BCF PIR1,2       ; Clear CCP1 interrupt flag
+    BANKSEL PORTC
+    BCF PORTC,2      ; Bring RC2 LOW
+    BANKSEL servo_busy
+    CLRF servo_busy  ; Safe to service foreground again
+    BANKSEL PIE1
+    BCF PIE1,2       ; Disable CCP1 until next frame
+    Goto LeaveISR
     
-Delay50usLoop:
-    ;Delay loop is equals 44 Tcy when count is 15
-    MOVLW 0x0F             ;1 Tcy move W=15 to count
-    MOVWF Count50us        ;1 Tcy make count equal 15                                    
-    DECFSZ Count50us,1     ;1 Tcy if not zero, 2 Tcy if zero
-    GOTO $-1               ;2 Tcy delay runs 15 times before skiping
-    RETURN
+    LeaveISR:
+    ; Restore STATUS and W register
+    SWAPF STATUS_TEMP,W
+    MOVWF STATUS
+    SWAPF W_TEMP,F
+    SWAPF W_TEMP,W
+    RETFIE
 
 END
