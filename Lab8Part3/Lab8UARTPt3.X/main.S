@@ -140,7 +140,7 @@ Main:
     CALL ServiceTx
     
     ; add a 5ms delay to casue over run 
-    ; CAll Delay5ms
+    CAll Delay5ms
     GOTO Main        ; Keep repeating the main loop
 
 ServiceRx:
